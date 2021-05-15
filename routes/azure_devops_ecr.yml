@@ -1,0 +1,138 @@
+# Node.js
+
+
+# Build a general Node.js project with npm.
+# Add steps that analyze code, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
+
+trigger:
+- master
+pool:
+  vmImage: 'ubuntu-latest'
+variables:
+- name: 'AWS_REGION'
+  value: 'us-east-1'
+- name: 'AWS_ACCOUNT_ID'
+  value: '382027692032'
+- name: 'AWS_ACCESS_KEY_ID'
+  value: 'AKIAVR4U77AAJT3UZLXQ'
+- name: 'AWS_SECRET_ACCESS_KEY'
+  value: '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'
+- name: 'DOCKER_REPOSITORY'
+  value: '382027692032.dkr.ecr.us-east-1.amazonaws.com/app-tech-coe'
+
+steps:
+
+- task: NodeTool@0
+  displayName: 'Use Node version 10.14.1'
+  inputs:
+    versionSpec: 10.14.1
+
+- task: Npm@1
+  displayName: 'Install Application Dependencies'
+  inputs:
+    workingDir: '$(System.DefaultWorkingDirectory)'
+    verbose: false
+
+- task: Npm@1
+  displayName: 'Build the application'
+  inputs:
+    command: custom
+    workingDir: '$(System.DefaultWorkingDirectory)'
+    verbose: false
+    customCommand: 'run build --if-present'
+
+- task: Npm@0
+  displayName: 'execute the Unit test '
+  inputs:
+    cwd: '$(Build.SourcesDirectory)'
+    command: run
+    arguments: 'test --watch=false'
+  continueOnError: true
+
+- task: Npm@1
+  displayName: 'Remove extraneous packages'
+  inputs:
+    command: custom
+    workingDir: '$(System.DefaultWorkingDirectory)'
+    verbose: false
+    customCommand: 'prune --production'
+
+- task: ArchiveFiles@2
+  displayName: 'Archive files'
+  inputs:
+    rootFolderOrFile: '$(System.DefaultWorkingDirectory)'
+    includeRootFolder: false
+
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish Artifact: drop'
+
+- task: Npm@1
+  displayName: 'npm ci'
+  inputs:
+    command: ci
+    verbose: false
+
+
+- task: OWASPDependencyCheck@0
+  inputs:
+    outputDirectory: '$(Agent.TempDirectory)/dependency-scan-results'
+    scanDirectory: '$(Build.SourcesDirectory)'
+    outputFormat: 'ALL'
+    useSonarQubeIntegration: false
+
+- task: SonarSource.sonarqube.15B84CA1-B62F-4A2A-A403-89B77A063157.SonarQubePrepare@4
+  displayName: 'Prepare analysis on SonarQube'
+  inputs:
+    SonarQube: sonarqube
+    scannerMode: CLI
+    configMode: manual
+    cliProjectKey: 'adop:APPCOZFZ:piab-ref-app-nodejs'
+    cliProjectName: 'piab-ref-app-nodejs '
+    extraProperties: |
+     # Additional properties that will be passed to the scanner, 
+     # Put one key=value per line, example:
+     sonar.exclusions=test/**/*,node_modules/**/*
+     sonar.eslint.eslintpath=./node_modules/eslint/bin/eslint 
+     sonar.javascript.lcov.reportPaths=${System.DefaultWorkingDirectory}/coverage/lcov.info
+     sonar.dependencyCheck.jsonReportPath=$(Agent.TempDirectory)/dependency-scan-results/dependency-check-report.json 
+     sonar.dependencyCheck.reportPath=$(Agent.TempDirectory)/dependency-scan-results/dependency-check-report.xml
+     sonar.dependencyCheck.htmlReportPath=$(Agent.TempDirectory)/dependency-scan-results/dependency-check-report.html"
+
+     
+     
+
+- task: SonarSource.sonarqube.6D01813A-9589-4B15-8491-8164AEB38055.SonarQubeAnalyze@4
+  displayName: 'Run Code Analysis'
+
+- task: SonarSource.sonarqube.291ed61f-1ee4-45d3-b1b0-bf822d9095ef.SonarQubePublish@4
+  displayName: 'Publish Quality Gate Result'
+- script: |
+   aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+  displayName: 'Login to AWS'
+  env:
+    AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+    AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+ACR
+- task: Docker@2
+  displayName: Build and push an image to container registry
+  inputs:
+      command: buildAndPush
+      repository: 'ADOPappcoetech'      
+      containerRegistry: 'azure'
+      Dockerfile: '**/Dockerfile'
+      tags: latest
+      
+ 
+ECR
+- task: Docker@2   
+  inputs:
+    repository: $(DOCKER_REPOSITORY)
+    command: 'buildAndPush'
+    Dockerfile: '**/Dockerfile'
+    displayName: 'build docker image'
+  
+
+  
+  
+

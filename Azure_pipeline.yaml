@@ -1,0 +1,51 @@
+# Node.js
+
+
+# Build a general Node.js project with npm.
+# Add steps that analyze code, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
+
+trigger:
+- master
+pool:
+  vmImage: 'ubuntu-latest'
+variables:
+- name: 'AWS_REGION'
+  value: 'us-east-1'
+- name: 'AWS_ACCOUNT_ID'
+  value: 'Aws account id'
+- name: 'AWS_ACCESS_KEY_ID'
+  value: 'aws access key'
+- name: 'AWS_SECRET_ACCESS_KEY'
+  value: 'aws secret key'
+- name: 'DOCKER_REPOSITORY_NAME'
+  value: 'sample'
+- name: 'DOCKER_REPOSITORY'
+  value: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${DOCKER_REPOSITORY_NAME}'
+
+steps:
+
+- task: NodeTool@0
+  displayName: 'Use Node version 10.14.1'
+  inputs:
+    versionSpec: 10.14.1
+
+- task: Npm@1
+  displayName: 'Install Application Dependencies'
+  inputs:
+    workingDir: '$(System.DefaultWorkingDirectory)'
+    verbose: false
+    
+- script: |
+   aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+  displayName: 'Login to AWS'
+  env:
+    AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+    AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+
+- task: Docker@2   
+  inputs:
+    repository: $(DOCKER_REPOSITORY)
+    command: 'buildAndPush'
+    Dockerfile: '**/Dockerfile'
+    displayName: 'build docker image'
